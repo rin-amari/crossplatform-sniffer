@@ -14,6 +14,7 @@ type Settings struct {
 	protocols string // list of protocols to capture
 	save      bool   // whether to save captured packets to file
 	time      int    // how long to capture packets (in milliseconds)
+	promisc   bool   // whether to turn the promiscuous mode on
 }
 
 func main() {
@@ -27,7 +28,7 @@ func main() {
 	// Create table widget to display captured packets
 	tableWidget := widgets.NewQTableWidget2(0, 10, nil)
 	tableWidget.SetVerticalScrollBarPolicy(core.Qt__ScrollBarAlwaysOn)
-	tableWidget.SetHorizontalScrollBarPolicy(core.Qt__ScrollBarAlwaysOff)
+	tableWidget.SetHorizontalScrollBarPolicy(core.Qt__ScrollBarAlwaysOn)
 
 	// Create header view for the table widget
 	headerView := widgets.NewQHeaderView(core.Qt__Horizontal, tableWidget)
@@ -68,7 +69,7 @@ func main() {
 		icmp6Checkbox := widgets.NewQCheckBox2("ICMP6", nil)
 		allCheckbox := widgets.NewQCheckBox2("All", nil)
 
-		// Add the check boxes to the protocol layout
+		// Add the checkboxes to the protocol layout
 		protocolLayout.AddWidget(tcpCheckbox, 0, core.Qt__AlignLeft)
 		protocolLayout.AddWidget(udpCheckbox, 0, core.Qt__AlignLeft)
 		protocolLayout.AddWidget(sctpCheckbox, 0, core.Qt__AlignLeft)
@@ -76,9 +77,13 @@ func main() {
 		protocolLayout.AddWidget(icmp6Checkbox, 0, core.Qt__AlignLeft)
 		protocolLayout.AddWidget(allCheckbox, 0, core.Qt__AlignLeft)
 
-		// Create a check box for whether to save the captured packets to a file
+		// Create a checkbox for whether to save the captured packets to a file
 		saveLabel := widgets.NewQLabel2("Save:", dialog, 0)
 		saveCheckbox := widgets.NewQCheckBox2("Save", nil)
+
+		// Create a promisc for whether to turn the promiscuous mode on
+		promiscLabel := widgets.NewQLabel2("Promiscuous mode:", dialog, 0)
+		promiscCheckbox := widgets.NewQCheckBox2("Promisc", nil)
 
 		// Create a label and a line edit widget for capturing time settings
 		timeLabel := widgets.NewQLabel2("Time to capture(ms):", dialog, 0)
@@ -87,6 +92,8 @@ func main() {
 		// Add widgets to dialog layout
 		dialogLayout.AddWidget(saveLabel, 0, 0)
 		dialogLayout.AddWidget(saveCheckbox, 0, 0)
+		dialogLayout.AddWidget(promiscLabel, 0, 0)
+		dialogLayout.AddWidget(promiscCheckbox, 0, 0)
 		dialogLayout.AddWidget(timeLabel, 0, 0)
 		dialogLayout.AddWidget(timeEdit, 0, 0)
 		dialogLayout.AddWidget(protocolBox, 0, 0)
@@ -127,6 +134,13 @@ func main() {
 				settings.save = false
 			}
 
+			// Set the promisc setting based on user input
+			if promiscCheckbox.IsChecked() {
+				settings.promisc = true
+			} else {
+				settings.promisc = false
+			}
+
 			// Set the time setting based on user input
 			if time := timeEdit.Text(); time != "" {
 				timeInt, err := strconv.Atoi(time)
@@ -153,18 +167,17 @@ func main() {
 
 	// Create table headers and add them to the table widget
 	tableWidget.SetHorizontalHeader(headerView)
-	tableWidget.VerticalHeader().SetVisible(false)
+	tableWidget.VerticalHeader().SetVisible(true)
 
-	item1 := widgets.NewQTableWidgetItem2("#", 0)
-	item2 := widgets.NewQTableWidgetItem2("Time", 0)
-	item3 := widgets.NewQTableWidgetItem2("Protocol", 0)
-	item4 := widgets.NewQTableWidgetItem2("Size", 0)
-	item5 := widgets.NewQTableWidgetItem2("SrcIP", 0)
-	item6 := widgets.NewQTableWidgetItem2("DstIP", 0)
-	item7 := widgets.NewQTableWidgetItem2("SrcPort", 0)
-	item8 := widgets.NewQTableWidgetItem2("DstPost", 0)
-	item9 := widgets.NewQTableWidgetItem2("Truncated", 0)
-	item10 := widgets.NewQTableWidgetItem2("Data", 0)
+	item1 := widgets.NewQTableWidgetItem2("Time", 0)
+	item2 := widgets.NewQTableWidgetItem2("Protocol", 0)
+	item3 := widgets.NewQTableWidgetItem2("Size", 0)
+	item4 := widgets.NewQTableWidgetItem2("SrcIP", 0)
+	item5 := widgets.NewQTableWidgetItem2("DstIP", 0)
+	item6 := widgets.NewQTableWidgetItem2("SrcPort", 0)
+	item7 := widgets.NewQTableWidgetItem2("DstPost", 0)
+	item8 := widgets.NewQTableWidgetItem2("Truncated", 0)
+	item9 := widgets.NewQTableWidgetItem2("Data", 0)
 
 	tableWidget.SetHorizontalHeaderItem(0, item1)
 	tableWidget.SetHorizontalHeaderItem(1, item2)
@@ -175,7 +188,6 @@ func main() {
 	tableWidget.SetHorizontalHeaderItem(6, item7)
 	tableWidget.SetHorizontalHeaderItem(7, item8)
 	tableWidget.SetHorizontalHeaderItem(8, item9)
-	tableWidget.SetHorizontalHeaderItem(9, item10)
 
 	mainWindow.SetCentralWidget(tableWidget)
 

@@ -19,7 +19,6 @@ import (
 )
 
 type Packet struct {
-	num        int
 	time       time.Time
 	truncated  bool
 	protocol   string
@@ -34,27 +33,47 @@ type Packet struct {
 // String returns a string representation of the Packet
 func (p Packet) String() string {
 	return fmt.Sprintf(
-		"Packet #%d\tTime: %v\tTruncated: %v\n"+
+		"Packet\tTime: %v\tTruncated: %v\n"+
 			"\tProtocol: %s\tSourceIP: %v\tDestIP: %v\n"+
 			"\tSourcePort: %d\tDestPort: %d\tPacketSize: %d\n"+
 			"Dump: \n%v\n",
-		p.num, p.time, p.truncated,
+		p.time, p.truncated,
 		p.protocol, p.sourceIP, p.destIP,
 		p.sourcePort, p.destPort, p.packetSize,
 		p.dump,
 	)
 }
 
+func createHandle(Name string, promisc bool) *pcap.Handle {
+	if promisc {
+		handle, err := pcap.OpenLive(Name, 65535, true, pcap.BlockForever)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return handle
+	} else {
+		handle, err := pcap.OpenLive(Name, 65535, false, pcap.BlockForever)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return handle
+	}
+}
+
 var file os.File // file for writing packet data
 
 // Sniff captures and displays network traffic in a GUI table
 func Sniff(table *widgets.QTableWidget, settings *Settings) {
-	file, err := os.Create(time.Now().Format("2006_01_02_15_04_05") + ".txt")
-	defer file.Close()
-	if err != nil {
-		fmt.Println(err)
-		return
+	if settings.save {
+		file, err := os.Create(time.Now().Format("2006_01_02_15_04_05") + ".txt")
+		defer file.Close()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	}
+
+	timer := time.After(time.Duration(settings.time) * time.Millisecond)
 
 	// Find all available network interfaces
 	ifs, err := pcap.FindAllDevs()
@@ -80,10 +99,7 @@ func Sniff(table *widgets.QTableWidget, settings *Settings) {
 			defer wg.Done()
 
 			// Open a handle to the network interface for packet capture
-			handle, err := pcap.OpenLive(iface.Name, 65535, true, pcap.BlockForever)
-			if err != nil {
-				log.Fatal(err)
-			}
+			handle := createHandle(iface.Name, settings.promisc)
 			defer handle.Close()
 
 			// Set a packet capture filter, if specified
@@ -98,13 +114,23 @@ func Sniff(table *widgets.QTableWidget, settings *Settings) {
 			// Start capturing packets and processing them
 			packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 			for packetS := range packetSource.Packets() {
+				fmt.Println("in")
+				if settings.time != 0 {
+					fmt.Println("in2")
+					go func() {
+						if <-timer == time.Now() {
+							fmt.Println("time is over!!")
+							os.Exit(0)
+						}
+					}()
+
+				}
 				num += 1
 
 				// Create a new packet instance
 				packet := new(Packet)
 
 				// Set the packet number, packet size, and timestamp from packetS.Metadata()
-				packet.num = num
 				packet.packetSize = packetS.Metadata().CaptureLength
 				packet.time = packetS.Metadata().Timestamp
 
@@ -154,23 +180,17 @@ func Sniff(table *widgets.QTableWidget, settings *Settings) {
 				rowC := table.RowCount()
 				table.InsertRow(rowC)
 
-				// Set the packet number QTableWidgetItem
-				row := widgets.NewQTableWidgetItem(packet.num - 1)
-				row.SetData(0, core.NewQVariant1(packet.num))
-				table.SetItem(table.RowCount(), 0, row)
-
 				// Set the remaining QTableWidgetItem values
-				table.SetItem(rowC, 0, widgets.NewQTableWidgetItem2(strconv.Itoa(packet.num), 0))
 				timeStr := packet.time.Format("15:04:05 02-01-2006 ")
-				table.SetItem(rowC, 1, widgets.NewQTableWidgetItem2(timeStr, 1))
-				table.SetItem(rowC, 2, widgets.NewQTableWidgetItem2(packet.protocol, 2))
-				table.SetItem(rowC, 3, widgets.NewQTableWidgetItem2(strconv.Itoa(packet.packetSize), 3))
-				table.SetItem(rowC, 4, widgets.NewQTableWidgetItem2(packet.sourceIP.String(), 4))
-				table.SetItem(rowC, 5, widgets.NewQTableWidgetItem2(packet.destIP.String(), 5))
-				table.SetItem(rowC, 6, widgets.NewQTableWidgetItem2(packet.sourcePort.String(), 6))
-				table.SetItem(rowC, 7, widgets.NewQTableWidgetItem2(packet.destPort.String(), 7))
-				table.SetItem(rowC, 8, widgets.NewQTableWidgetItem2(strconv.FormatBool(packet.truncated), 8))
-				table.SetItem(rowC, 9, widgets.NewQTableWidgetItem2(strings.Join(packet.dump, "\n"), 9))
+				table.SetItem(rowC, 0, widgets.NewQTableWidgetItem2(timeStr, 0))
+				table.SetItem(rowC, 1, widgets.NewQTableWidgetItem2(packet.protocol, 1))
+				table.SetItem(rowC, 2, widgets.NewQTableWidgetItem2(strconv.Itoa(packet.packetSize), 2))
+				table.SetItem(rowC, 3, widgets.NewQTableWidgetItem2(packet.sourceIP.String(), 3))
+				table.SetItem(rowC, 4, widgets.NewQTableWidgetItem2(packet.destIP.String(), 4))
+				table.SetItem(rowC, 5, widgets.NewQTableWidgetItem2(packet.sourcePort.String(), 5))
+				table.SetItem(rowC, 6, widgets.NewQTableWidgetItem2(packet.destPort.String(), 6))
+				table.SetItem(rowC, 7, widgets.NewQTableWidgetItem2(strconv.FormatBool(packet.truncated), 7))
+				table.SetItem(rowC, 8, widgets.NewQTableWidgetItem2(strings.Join(packet.dump, "\n"), 8))
 
 				// Set the background color of the protocol field in the table
 				color := gui.NewQBrush3(gui.NewQColor2(core.Qt__white), core.Qt__BrushStyle(1))
@@ -186,7 +206,7 @@ func Sniff(table *widgets.QTableWidget, settings *Settings) {
 				case "IPv6":
 					color = gui.NewQBrush3(gui.NewQColor2(core.Qt__darkGreen), core.Qt__BrushStyle(1))
 				}
-				table.Item(rowC, 2).SetBackground(color)
+				table.Item(rowC, 1).SetBackground(color)
 			}
 
 		}(iface)
